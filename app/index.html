@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employee Attendance & Analytics Portal</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0fdf4', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 900: '#14532d' },
+            slate: { 850: '#151e2e' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-lg">
+          <i class="fa-solid fa-business-time text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            HROne Attendance & Analytics
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">v2.0</span>
+          </h1>
+          <p class="text-xs text-slate-400">Enterprise Shift & Punch Management</p>
+        </div>
+      </div>
+
+      <!-- Health Indicator -->
+      <div class="flex items-center space-x-4">
+        <div id="healthBadge" class="flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-800 text-xs border border-slate-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-slate-300 font-medium" id="healthText">Checking DB...</span>
+        </div>
+        <button onclick="refreshAll()" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="bg-white border-b border-slate-200 shadow-sm sticky top-16 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="flex space-x-8" aria-label="Tabs">
+        <button onclick="switchTab('punch')" id="tab-punch" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 border-brand-600 text-brand-600">
+          <i class="fa-solid fa-fingerprint"></i> Punch Station
+        </button>
+        <button onclick="switchTab('employees')" id="tab-employees" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+          <i class="fa-solid fa-users"></i> Employees
+        </button>
+        <button onclick="switchTab('attendance')" id="tab-attendance" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+          <i class="fa-solid fa-clipboard-user"></i> Attendance Logs
+        </button>
+        <button onclick="switchTab('analytics')" id="tab-analytics" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+          <i class="fa-solid fa-chart-line"></i> Analytics & Trends
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 hidden z-50 max-w-md bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center space-x-3 transition-all">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+      <div id="toastMsg" class="text-sm font-medium">Operation completed</div>
+    </div>
+
+    <!-- TAB 1: PUNCH STATION -->
+    <div id="view-punch" class="tab-content space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Live Clock & Punch Card -->
+        <div class="md:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Virtual Timeclock</h2>
+              <p class="text-xs text-slate-500">Record IST attendance punches with automatic shift date & late calculations</p>
+            </div>
+            <div class="text-right">
+              <div id="liveClock" class="text-2xl font-mono font-bold text-slate-900">--:--:--</div>
+              <div id="liveDate" class="text-xs text-slate-500">IST Timezone (UTC+05:30)</div>
+            </div>
+          </div>
+
+          <form id="punchForm" onsubmit="event.preventDefault();" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Select Employee</label>
+              <select id="punchEmpSelect" class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="">Loading employees...</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Status (Punch-in only)</label>
+                <select id="punchStatus" class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                  <option value="PRESENT">PRESENT (Office)</option>
+                  <option value="WFH">WFH (Work From Home)</option>
+                  <option value="ON_DUTY">ON_DUTY (Field/Client)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Custom Epoch Ms (Optional)</label>
+                <input type="number" id="punchCustomMs" placeholder="Leave blank for current time" class="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <span class="text-[10px] text-slate-400 block mt-0.5">Leave empty to use current real-time clock</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+              <button onclick="handlePunch('in')" type="button" class="w-full py-3 px-4 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> Punch IN
+              </button>
+              <button onclick="handlePunch('out')" type="button" class="w-full py-3 px-4 rounded-xl font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> Punch OUT
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Rules Quick Card -->
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-sm border border-slate-700 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-scale-balanced"></i> Active Business Rules
+            </h3>
+            <ul class="text-xs space-y-2.5 text-slate-300">
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-400 font-bold">R1:</span>
+                <span>IST Timezone & overnight shifts (< 06:00 matches previous day).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-400 font-bold">R2:</span>
+                <span>10-min grace period. Late calculated strictly after 10m from shift start.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-400 font-bold">R3:</span>
+                <span>Overtime requires $\ge 30$ minutes after shift end.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-400 font-bold">R4/R5:</span>
+                <span>Work hours half-up rounding. < 4.5h marked as Half Day.</span>
+              </li>
+            </ul>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-700/60 text-xs text-slate-400">
+            Concurrency guarantee: Atomic unique index locking on simultaneous punches.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Recent Punch Result Display -->
+      <div id="punchResultCard" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-receipt text-brand-600"></i> Latest Punch Result
+        </h3>
+        <div id="punchResultContent" class="bg-slate-50 p-4 rounded-xl font-mono text-xs text-slate-800 overflow-x-auto"></div>
+      </div>
+    </div>
+
+    <!-- TAB 2: EMPLOYEES -->
+    <div id="view-employees" class="tab-content hidden space-y-6">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          <div class="relative flex-1 sm:w-64">
+            <i class="fa-solid fa-filter absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <select id="empDeptFilter" onchange="loadEmployees()" class="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="">All Departments</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Sales">Sales</option>
+              <option value="Support">Support</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="openModal('createEmpModal')" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition">
+          <i class="fa-solid fa-user-plus"></i> Add Employee
+        </button>
+      </div>
+
+      <!-- Employee Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-600">
+            <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+              <tr>
+                <th class="px-6 py-4">Employee Code</th>
+                <th class="px-6 py-4">Name</th>
+                <th class="px-6 py-4">Department</th>
+                <th class="px-6 py-4">Shift Hours (IST)</th>
+                <th class="px-6 py-4">Joined On</th>
+                <th class="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="empTableBody" class="divide-y divide-slate-100">
+              <tr><td colspan="6" class="px-6 py-8 text-center text-slate-400">Loading employees...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: ATTENDANCE LOGS -->
+    <div id="view-attendance" class="tab-content hidden space-y-6">
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Employee Code</label>
+          <input type="text" id="attEmpFilter" placeholder="e.g. EMP0001" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Date From</label>
+          <input type="date" id="attDateFrom" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Date To</label>
+          <input type="date" id="attDateTo" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div class="flex items-end">
+          <button onclick="loadAttendance()" class="w-full py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-magnifying-glass"></i> Filter Logs
+          </button>
+        </div>
+      </div>
+
+      <!-- Attendance Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-600">
+            <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+              <tr>
+                <th class="px-6 py-4">Emp Code</th>
+                <th class="px-6 py-4">Date</th>
+                <th class="px-6 py-4">Status</th>
+                <th class="px-6 py-4">Work Hours</th>
+                <th class="px-6 py-4">Late / OT (Min)</th>
+                <th class="px-6 py-4">Half Day</th>
+                <th class="px-6 py-4">History</th>
+                <th class="px-6 py-4 text-right">Regularize</th>
+              </tr>
+            </thead>
+            <tbody id="attTableBody" class="divide-y divide-slate-100">
+              <tr><td colspan="8" class="px-6 py-8 text-center text-slate-400">Loading attendance...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: ANALYTICS & TRENDS -->
+    <div id="view-analytics" class="tab-content hidden space-y-8">
+      
+      <!-- Month Selector -->
+      <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-semibold text-slate-700">Analytics Month:</label>
+          <input type="month" id="analyticsMonth" value="2026-07" onchange="loadAnalytics()" class="px-3 py-1.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <button onclick="loadAnalytics()" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs flex items-center gap-2 transition">
+          <i class="fa-solid fa-sync"></i> Refresh Data
+        </button>
+      </div>
+
+      <!-- Department Summary Cards -->
+      <div>
+        <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-building text-brand-600"></i> Department Monthly Summaries
+        </h3>
+        <div id="deptSummaryContainer" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="col-span-3 text-center py-6 text-slate-400">Loading department statistics...</div>
+        </div>
+      </div>
+
+      <!-- Leaderboard & Employee Monthly -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Late Leaderboard -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-amber-500"></i> Late-Comers Leaderboard
+              </h3>
+              <span class="text-xs text-slate-400 font-medium">Standard Competition Ranking</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                  <tr>
+                    <th class="py-2.5 px-3">Rank</th>
+                    <th class="py-2.5 px-3">Employee</th>
+                    <th class="py-2.5 px-3">Department</th>
+                    <th class="py-2.5 px-3 text-right">Total Late (min)</th>
+                    <th class="py-2.5 px-3 text-right">Count</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboardBody" class="divide-y divide-slate-100">
+                  <tr><td colspan="5" class="py-4 text-center text-slate-400">No late entries found</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Single Employee Drilldown -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-id-card-clip text-brand-600"></i> Employee Monthly Breakdown
+            </h3>
+            <select id="empSummarySelect" onchange="loadEmployeeMonthly()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="">Select Employee</option>
+            </select>
+          </div>
+
+          <div id="empMonthlyStats" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Working Days</div>
+              <div id="emWorkingDays" class="text-lg font-bold text-slate-900">--</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Present Days</div>
+              <div id="emPresentDays" class="text-lg font-bold text-brand-600">--</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Attendance %</div>
+              <div id="emAttendancePct" class="text-lg font-bold text-slate-900">--</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Leave Days</div>
+              <div id="emLeaveDays" class="text-lg font-bold text-slate-700">--</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Total Late (min)</div>
+              <div id="emTotalLate" class="text-lg font-bold text-amber-600">--</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div class="text-xs text-slate-500">Total OT (min)</div>
+              <div id="emTotalOT" class="text-lg font-bold text-emerald-600">--</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Department Trend Chart ($densify & $setWindowFields) -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-chart-area text-brand-600"></i> Department Daily Attendance Trend
+            </h3>
+            <p class="text-xs text-slate-500">MongoDB $densify Gap-Filled Calendar with 7-Day Moving Average</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <select id="trendDeptSelect" onchange="loadTrendChart()" class="text-xs border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="Engineering">Engineering</option>
+              <option value="Sales">Sales</option>
+              <option value="Support">Support</option>
+            </select>
+          </div>
+        </div>
+        <div class="h-80 w-full">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL: Add Employee -->
+  <div id="createEmpModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900">Add New Employee</h3>
+        <button onclick="closeModal('createEmpModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="createEmpForm" onsubmit="handleCreateEmployee(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Emp Code (e.g. EMP0100)</label>
+          <input type="text" id="newEmpCode" pattern="^EMP\d{4,6}$" required placeholder="EMP0100" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name</label>
+          <input type="text" id="newEmpName" required placeholder="Kavita Sen" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+          <input type="email" id="newEmpEmail" required placeholder="kavita@example.com" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Department</label>
+          <input type="text" id="newEmpDept" required placeholder="Engineering" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Shift Start</label>
+            <input type="text" id="newEmpStart" value="09:30" pattern="^([01]\d|2[0-3]):[0-5]\d$" required class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Shift End</label>
+            <input type="text" id="newEmpEnd" value="18:30" pattern="^([01]\d|2[0-3]):[0-5]\d$" required class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Joined On</label>
+          <input type="date" id="newEmpJoined" required value="2026-07-01" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div class="pt-2 flex justify-end gap-3">
+          <button type="button" onclick="closeModal('createEmpModal')" class="px-4 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 text-sm font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Save Employee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Regularize Attendance -->
+  <div id="regularizeModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900">Regularize Record</h3>
+        <button onclick="closeModal('regularizeModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="regularizeForm" onsubmit="handleRegularizeSubmit(event)" class="space-y-3">
+        <input type="hidden" id="regEmpCode">
+        <input type="hidden" id="regDate">
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Record ID</label>
+          <div id="regTargetLabel" class="text-xs font-mono font-bold text-brand-600 p-2 bg-slate-50 rounded-lg">--</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">New Status</label>
+          <select id="regStatus" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="PRESENT">PRESENT</option>
+            <option value="WFH">WFH</option>
+            <option value="ON_DUTY">ON_DUTY</option>
+            <option value="ABSENT">ABSENT</option>
+            <option value="LEAVE">LEAVE</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Reason for correction (Min 5 chars)</label>
+          <input type="text" id="regReason" required minlength="5" placeholder="e.g. Biometric reader hardware glitch" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Regularized By</label>
+          <input type="text" id="regBy" required placeholder="e.g. hr.manager" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div class="pt-2 flex justify-end gap-3">
+          <button type="button" onclick="closeModal('regularizeModal')" class="px-4 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 text-sm font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Apply Correction</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript Frontend Logic -->
+  <script>
+    const API_BASE = window.location.origin;
+    let trendChartInstance = null;
+
+    // Toast helper
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toastIcon');
+      const text = document.getElementById('toastMsg');
+      text.textContent = msg;
+      icon.className = isSuccess ? 'fa-solid fa-circle-check text-emerald-400 text-lg' : 'fa-solid fa-circle-xmark text-rose-400 text-lg';
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3500);
+    }
+
+    // Tab switcher
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-brand-600', 'text-brand-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+      document.getElementById('tab-' + tabId).classList.add('border-brand-600', 'text-brand-600');
+      document.getElementById('tab-' + tabId).classList.remove('border-transparent', 'text-slate-500');
+
+      document.querySelectorAll('.tab-content').forEach(view => view.classList.add('hidden'));
+      document.getElementById('view-' + tabId).classList.remove('hidden');
+
+      if (tabId === 'employees') loadEmployees();
+      if (tabId === 'attendance') loadAttendance();
+      if (tabId === 'analytics') loadAnalytics();
+    }
+
+    // Modal Helpers
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // Live Clock
+    function updateClock() {
+      const now = new Date();
+      // IST options
+      const istString = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+      const istDate = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+      document.getElementById('liveClock').textContent = istString;
+      document.getElementById('liveDate').textContent = `${istDate} (IST)`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Check System Health
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/health`);
+        if (res.ok) {
+          document.getElementById('healthText').textContent = 'MongoDB Connected';
+          document.getElementById('healthBadge').className = 'flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-950/40 text-xs border border-emerald-500/30 text-emerald-400';
+        } else {
+          throw new Error();
+        }
+      } catch (e) {
+        document.getElementById('healthText').textContent = 'DB Offline (503)';
+        document.getElementById('healthBadge').className = 'flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-950/40 text-xs border border-rose-500/30 text-rose-400';
+      }
+    }
+
+    // Populate Employee Select dropdowns
+    async function populateEmployeeSelects() {
+      try {
+        const res = await fetch(`${API_BASE}/employees?page=1&page_size=100`);
+        const data = await res.json();
+        const punchSelect = document.getElementById('punchEmpSelect');
+        const summarySelect = document.getElementById('empSummarySelect');
+        punchSelect.innerHTML = '';
+        summarySelect.innerHTML = '<option value="">Select Employee</option>';
+
+        data.items.forEach(emp => {
+          const opt = `<option value="${emp.emp_code}">${emp.emp_code} - ${emp.name} (${emp.department})</option>`;
+          punchSelect.insertAdjacentHTML('beforeend', opt);
+          summarySelect.insertAdjacentHTML('beforeend', opt);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function formatErrorMessage(detail) {
+      if (!detail) return 'Request failed';
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) {
+        return detail.map(item => (item.loc ? item.loc[item.loc.length - 1] + ': ' : '') + (item.msg || JSON.stringify(item))).join('; ');
+      }
+      if (typeof detail === 'object') return JSON.stringify(detail);
+      return String(detail);
+    }
+
+    // Punch Handler
+    async function handlePunch(type) {
+      const empCode = document.getElementById('punchEmpSelect').value;
+      if (!empCode) {
+        showToast('Please select an employee', false);
+        return;
+      }
+      const customMs = document.getElementById('punchCustomMs').value.trim();
+      const endpoint = type === 'in' ? `${API_BASE}/attendance/punch-in` : `${API_BASE}/attendance/punch-out`;
+
+      const payload = { emp_code: empCode };
+      if (customMs && customMs !== '0') {
+        const parsed = parseInt(customMs);
+        if (parsed < 100000000000) {
+          showToast('Custom Epoch Ms must be at least 13 digits (milliseconds)', false);
+          return;
+        }
+        payload.punched_at = parsed;
+      }
+      if (type === 'in') payload.status = document.getElementById('punchStatus').value;
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Punch-${type.toUpperCase()} successful for ${empCode}!`);
+          document.getElementById('punchResultCard').classList.remove('hidden');
+          document.getElementById('punchResultContent').textContent = JSON.stringify(data, null, 2);
+        } else {
+          showToast(`Error: ${formatErrorMessage(data.detail)}`, false);
+        }
+      } catch (e) {
+        showToast('Network error during punch', false);
+      }
+    }
+
+    // Load Employees List
+    async function loadEmployees() {
+      const dept = document.getElementById('empDeptFilter').value;
+      const url = `${API_BASE}/employees?page=1&page_size=100${dept ? '&department=' + encodeURIComponent(dept) : ''}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const tbody = document.getElementById('empTableBody');
+        tbody.innerHTML = '';
+        if (data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">No employees found</td></tr>';
+          return;
+        }
+        data.items.forEach(emp => {
+          const tr = `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-slate-900">${emp.emp_code}</td>
+              <td class="px-6 py-4 font-medium text-slate-950">${emp.name}<br><span class="text-xs text-slate-400">${emp.email}</span></td>
+              <td class="px-6 py-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">${emp.department}</span></td>
+              <td class="px-6 py-4 font-mono text-xs">${emp.shift_start} - ${emp.shift_end}</td>
+              <td class="px-6 py-4 text-xs">${emp.joined_on}</td>
+              <td class="px-6 py-4 text-right">
+                <button onclick="quickFilterAttendance('${emp.emp_code}')" class="text-xs text-brand-600 hover:text-brand-800 font-semibold">View Logs</button>
+              </td>
+            </tr>
+          `;
+          tbody.insertAdjacentHTML('beforeend', tr);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Create Employee Form
+    async function handleCreateEmployee(e) {
+      e.preventDefault();
+      const payload = {
+        emp_code: document.getElementById('newEmpCode').value,
+        name: document.getElementById('newEmpName').value,
+        email: document.getElementById('newEmpEmail').value,
+        department: document.getElementById('newEmpDept').value,
+        shift_start: document.getElementById('newEmpStart').value,
+        shift_end: document.getElementById('newEmpEnd').value,
+        joined_on: document.getElementById('newEmpJoined').value,
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/employees`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Employee ${payload.emp_code} created successfully!`);
+          closeModal('createEmpModal');
+          document.getElementById('createEmpForm').reset();
+          loadEmployees();
+          populateEmployeeSelects();
+        } else {
+          showToast(`Error: ${data.detail || 'Could not create employee'}`, false);
+        }
+      } catch (err) {
+        showToast('Network error', false);
+      }
+    }
+
+    // Load Attendance Logs
+    async function loadAttendance() {
+      const emp = document.getElementById('attEmpFilter').value;
+      const from = document.getElementById('attDateFrom').value;
+      const to = document.getElementById('attDateTo').value;
+
+      let url = `${API_BASE}/attendance?page=1&page_size=50`;
+      if (emp) url += `&emp_code=${encodeURIComponent(emp)}`;
+      if (from) url += `&date_from=${from}`;
+      if (to) url += `&date_to=${to}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const tbody = document.getElementById('attTableBody');
+        tbody.innerHTML = '';
+        if (data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-6 text-center text-slate-400">No attendance logs found</td></tr>';
+          return;
+        }
+
+        data.items.forEach(log => {
+          let badgeClass = 'bg-slate-100 text-slate-700';
+          if (log.status === 'PRESENT') badgeClass = 'bg-emerald-100 text-emerald-800';
+          if (log.status === 'WFH') badgeClass = 'bg-blue-100 text-blue-800';
+          if (log.status === 'ON_DUTY') badgeClass = 'bg-indigo-100 text-indigo-800';
+          if (log.status === 'LEAVE') badgeClass = 'bg-amber-100 text-amber-800';
+          if (log.status === 'ABSENT') badgeClass = 'bg-rose-100 text-rose-800';
+
+          const tr = `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-3.5 font-mono font-bold text-slate-900">${log.emp_code}</td>
+              <td class="px-6 py-3.5 text-xs font-mono">${log.date}</td>
+              <td class="px-6 py-3.5"><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${badgeClass}">${log.status}</span></td>
+              <td class="px-6 py-3.5 font-mono text-xs font-semibold">${log.work_hours !== null ? log.work_hours + ' hrs' : '<span class="text-slate-400 font-normal">Open</span>'}</td>
+              <td class="px-6 py-3.5 text-xs font-mono">${log.late_minutes}m / ${log.overtime_minutes}m</td>
+              <td class="px-6 py-3.5 text-xs">${log.half_day ? '<span class="text-amber-600 font-bold">Yes (0.5)</span>' : 'No'}</td>
+              <td class="px-6 py-3.5 text-xs">${log.history && log.history.length > 0 ? `<span class="text-brand-600 font-bold">${log.history.length} rev</span>` : '<span class="text-slate-400">0</span>'}</td>
+              <td class="px-6 py-3.5 text-right">
+                <button onclick="openRegularize('${log.emp_code}', '${log.date}', '${log.status}')" class="text-xs text-brand-600 hover:text-brand-800 font-semibold">Edit</button>
+              </td>
+            </tr>
+          `;
+          tbody.insertAdjacentHTML('beforeend', tr);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function quickFilterAttendance(empCode) {
+      switchTab('attendance');
+      document.getElementById('attEmpFilter').value = empCode;
+      loadAttendance();
+    }
+
+    // Open Regularize Modal
+    function openRegularize(empCode, dateStr, currentStatus) {
+      document.getElementById('regEmpCode').value = empCode;
+      document.getElementById('regDate').value = dateStr;
+      document.getElementById('regTargetLabel').textContent = `${empCode} on ${dateStr}`;
+      document.getElementById('regStatus').value = currentStatus;
+      openModal('regularizeModal');
+    }
+
+    // Submit Regularize Patch
+    async function handleRegularizeSubmit(e) {
+      e.preventDefault();
+      const empCode = document.getElementById('regEmpCode').value;
+      const dateStr = document.getElementById('regDate').value;
+      const payload = {
+        reason: document.getElementById('regReason').value,
+        regularized_by: document.getElementById('regBy').value,
+        status: document.getElementById('regStatus').value
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/attendance/${empCode}/${dateStr}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Record for ${empCode} regularized successfully!`);
+          closeModal('regularizeModal');
+          loadAttendance();
+        } else {
+          showToast(`Error: ${data.detail || 'Failed to regularize'}`, false);
+        }
+      } catch (err) {
+        showToast('Network error', false);
+      }
+    }
+
+    // Load Analytics
+    async function loadAnalytics() {
+      const month = document.getElementById('analyticsMonth').value || '2026-07';
+      
+      // 1. Department Summary
+      try {
+        const res = await fetch(`${API_BASE}/analytics/departments/summary?month=${month}`);
+        const data = await res.json();
+        const container = document.getElementById('deptSummaryContainer');
+        container.innerHTML = '';
+        data.items.forEach(dept => {
+          const card = `
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:border-brand-300 transition">
+              <div class="flex items-center justify-between border-b pb-3 mb-3">
+                <span class="font-bold text-slate-900">${dept.department}</span>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700">Headcount: ${dept.headcount}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span class="text-slate-400 block">Present Days</span>
+                  <span class="font-bold text-base text-brand-600">${dept.present_days}</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block">Avg Work Hours</span>
+                  <span class="font-bold text-base text-slate-800">${dept.avg_work_hours !== null ? dept.avg_work_hours + 'h' : '--'}</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block">Late Count</span>
+                  <span class="font-semibold text-slate-700">${dept.late_count} (${dept.total_late_minutes}m)</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block">Leave / On Duty</span>
+                  <span class="font-semibold text-slate-700">${dept.leave_count} / ${dept.on_duty_count}</span>
+                </div>
+              </div>
+            </div>
+          `;
+          container.insertAdjacentHTML('beforeend', card);
+        });
+      } catch (e) {}
+
+      // 2. Leaderboard
+      try {
+        const res = await fetch(`${API_BASE}/analytics/leaderboard/late?month=${month}&limit=5`);
+        const data = await res.json();
+        const tbody = document.getElementById('leaderboardBody');
+        tbody.innerHTML = '';
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-400">No late records this month</td></tr>';
+        } else {
+          data.items.forEach(row => {
+            const tr = `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="py-2.5 px-3 font-bold text-slate-700">#${row.rank}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${row.name} <span class="text-slate-400 font-mono text-xs">(${row.emp_code})</span></td>
+                <td class="py-2.5 px-3 text-slate-600">${row.department}</td>
+                <td class="py-2.5 px-3 font-mono font-bold text-amber-600 text-right">${row.total_late_minutes}m</td>
+                <td class="py-2.5 px-3 font-mono text-slate-700 text-right">${row.late_count}</td>
+              </tr>
+            `;
+            tbody.insertAdjacentHTML('beforeend', tr);
+          });
+        }
+      } catch (e) {}
+
+      // 3. Trend Chart
+      loadTrendChart();
+    }
+
+    // Load Single Employee Monthly
+    async function loadEmployeeMonthly() {
+      const empCode = document.getElementById('empSummarySelect').value;
+      const month = document.getElementById('analyticsMonth').value || '2026-07';
+      if (!empCode) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/analytics/employees/${empCode}/monthly?month=${month}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('emWorkingDays').textContent = data.working_days;
+        document.getElementById('emPresentDays').textContent = data.present_days;
+        document.getElementById('emAttendancePct').textContent = data.attendance_pct !== null ? `${data.attendance_pct}%` : 'N/A';
+        document.getElementById('emLeaveDays').textContent = data.leave_days;
+        document.getElementById('emTotalLate').textContent = `${data.total_late_minutes}m`;
+        document.getElementById('emTotalOT').textContent = `${data.total_overtime_minutes}m`;
+      } catch (e) {}
+    }
+
+    // Load Trend Chart
+    async function loadTrendChart() {
+      const dept = document.getElementById('trendDeptSelect').value || 'Engineering';
+      const month = document.getElementById('analyticsMonth').value || '2026-07';
+      const from = `${month}-01`;
+      // calculate last day
+      const [y, m] = month.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      const to = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+      try {
+        const res = await fetch(`${API_BASE}/analytics/departments/${encodeURIComponent(dept)}/trend?from=${from}&to=${to}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const labels = data.items.map(i => i.date.slice(5)); // MM-DD
+        const presentCounts = data.items.map(i => i.present_count);
+        const movingAverages = data.items.map(i => i.moving_avg_7d !== null ? (i.moving_avg_7d * 100).toFixed(1) : null);
+
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChartInstance) trendChartInstance.destroy();
+
+        trendChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Present Count (Headcount)',
+                data: presentCounts,
+                borderColor: '#16a34a',
+                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                fill: true,
+                tension: 0.2,
+                yAxisID: 'y'
+              },
+              {
+                label: '7-Day Moving Avg Rate (%)',
+                data: movingAverages,
+                borderColor: '#6366f1',
+                borderDash: [4, 4],
+                fill: false,
+                tension: 0.2,
+                yAxisID: 'y1'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: { display: true, text: 'Present Count' }
+              },
+              y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: { display: true, text: 'Moving Avg %' },
+                grid: { drawOnChartArea: false }
+              }
+            }
+          }
+        });
+      } catch (e) {}
+    }
+
+    function refreshAll() {
+      checkHealth();
+      populateEmployeeSelects();
+      loadEmployees();
+      loadAttendance();
+      loadAnalytics();
+      showToast('Dashboard refreshed');
+    }
+
+    // Init on load
+    window.onload = () => {
+      checkHealth();
+      populateEmployeeSelects();
+    };
+  </script>
+</body>
+</html>
